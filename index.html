@@ -223,17 +223,16 @@ button{font-family:'DM Sans',sans-serif;cursor:pointer;border:none}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 // ═══ FIREBASE CONFIG — PASTE YOUR VALUES HERE ═══
 const firebaseConfig = {
-  apiKey: "AIzaSyBa5VI4u-DYJhu0_YEeeTLZgDgvYoXHfp0",
-  authDomain: "allsides-staff.firebaseapp.com",
-  projectId: "allsides-staff",
-  storageBucket: "allsides-staff.firebasestorage.app",
-  messagingSenderId: "831160912585",
-  appId: "1:831160912585:web:4661d51c2bd90432489b18"
-
+  apiKey: "YOUR_API_KEY_HERE",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 window.firebaseConfig = firebaseConfig;
 const isConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
@@ -246,7 +245,7 @@ if (isConfigured) {
   window.fbInit = initializeApp;
   window.fbGetAuth = getAuth;
   window.fbCreateUser = createUserWithEmailAndPassword;
-  window.fb = { doc, getDoc, setDoc, deleteDoc, collection, onSnapshot, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential };
+  window.fb = { doc, getDoc, getDocs, setDoc, deleteDoc, collection, onSnapshot, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential };
   window.__firebaseStatus = "ready";
   window.dispatchEvent(new Event("firebaseReady"));
 } else {
@@ -329,6 +328,26 @@ function handleFirebaseReady() {
       try {
         var snap = await window.fb.getDoc(window.fb.doc(window.fbDb, "users", user.uid));
         if (!snap.exists()) {
+          // No profile found — check if this is the very first user (no other users exist)
+          // If so, auto-create them as owner. This handles the case where the Firestore
+          // document wasn't created manually, or the UID didn't match.
+          var usersSnap = await window.fb.getDoc(window.fb.doc(window.fbDb, "users", "__count__"));
+          // Check if ANY users exist by trying to get the users collection
+          var allUsers = await window.fb.getDocs(window.fb.collection(window.fbDb, "users"));
+          if (allUsers.empty) {
+            // No users at all — this must be the first/owner account. Auto-create.
+            var ownerProfile = {
+              name: user.displayName || user.email.split("@")[0],
+              email: user.email,
+              role: "owner",
+              createdAt: new Date().toISOString()
+            };
+            await window.fb.setDoc(window.fb.doc(window.fbDb, "users", user.uid), ownerProfile);
+            currentUser = { uid: user.uid, email: user.email, name: ownerProfile.name, role: "owner" };
+            showApp();
+            return;
+          }
+          // Users exist but this person isn't one of them
           await window.fb.signOut(window.fbAuth);
           document.getElementById("splash").style.display = "none";
           document.getElementById("login-screen").style.display = "flex";
